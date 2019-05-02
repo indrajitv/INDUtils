@@ -17,9 +17,9 @@ enum MethodName:String {
 
 class APIRequest:NSObject{
    
-  func doRequestForJson(urlString:String,method:MethodName,parameters:Mappable?,showLoading:Bool = true,returnError:Bool = false,completionHandler:@escaping (Any?,String?)->()){
+  func doRequestForJson(urlString:String,method:MethodName,parameters:Mappable?,showLoading:Bool = true,completionHandler:@escaping (Any?,Error?)->()){
         
-        getDataFromServer(urlString: urlString,method: method, parameters: parameters, showLoading: showLoading, returnError: returnError) { (data, error) in
+        getDataFromServer(urlString: urlString,method: method, parameters: parameters) { (data, error) in
             if let errorFound = error{
                 completionHandler(nil, errorFound)
             }else if let dataFound = data{
@@ -27,35 +27,37 @@ class APIRequest:NSObject{
                     let json = try JSONSerialization.jsonObject(with: dataFound, options: .mutableContainers)
                     completionHandler(json, nil)
                 }catch let err{
-                    print(err.localizedDescription)
-                    if returnError{
-                        completionHandler(nil,"Something went wrong")
-                    }else{
-                        self.someThingWrong()
-                    }
+                    completionHandler(nil,err)
                 }
+            }else{
+                completionHandler(nil,nil)
             }
         }
     }
     
-    func doRequestForDecodable<T:Mappable>(urlString:String,mapable:T.Type,method:MethodName,parameters:Mappable?,showLoading:Bool = true,returnError:Bool = false,completionHandler:@escaping (T?,String?)->()){
+    func doRequestForDecodable<T:Mappable>(urlString:String,mapable:T.Type,method:MethodName,parameters:Mappable?,showLoading:Bool = true,completionHandler:@escaping (T?,ServerErrorModel?,Error?)->()){
        
         
-        getDataFromServer(urlString: urlString, method: method, parameters: parameters, showLoading: showLoading, returnError: returnError) { (data, error) in
+        getDataFromServer(urlString: urlString, method: method, parameters: parameters) { (data, error) in
             if let errorFound = error{
-                completionHandler(nil, errorFound)
+                completionHandler(nil, nil,errorFound)
             }else if let dataFound = data,var stringFromData = String(data: dataFound, encoding: .utf8){
                 
+                //To be removed once API sorts the issue
                 if let json = try? JSONSerialization.jsonObject(with: dataFound, options: .mutableContainers) as? [[String:Any]]{
                     let arrayToJson = ["data":json]
                     if let dataOfarrayToJsonObject = try? JSONSerialization.data(withJSONObject: arrayToJson, options: .prettyPrinted),let stringConveted = String(data: dataOfarrayToJsonObject, encoding: .utf8){
                         stringFromData = stringConveted
                     }
                 }
+                //To be removed once API sorts the issue
                 
-                
-                let mappableObject = mapable.init(JSONString: stringFromData)
-                completionHandler(mappableObject, nil)
+                if let serverErrorModel = ServerErrorModel.init(JSONString: stringFromData){
+                        completionHandler(nil,serverErrorModel,nil)
+                }else{
+                    let mappableObject = mapable.init(JSONString: stringFromData)
+                    completionHandler(mappableObject,nil,nil)
+                }
             }
         }
         
@@ -66,8 +68,8 @@ class APIRequest:NSObject{
     }
     
     
-   fileprivate func getDataFromServer(urlString:String,method:MethodName,parameters:Mappable?,showLoading:Bool = true,returnError:Bool = false,completionHandler:@escaping (Data?,String?)->()){
-        
+   fileprivate func getDataFromServer(urlString:String,method:MethodName,parameters:Mappable?,completionHandler:@escaping (Data?,Error?)->()){
+    
      if let url = URL(string: urlString){
             
             var request = URLRequest(url: url,timeoutInterval: 60)
@@ -89,42 +91,23 @@ class APIRequest:NSObject{
             let configutation = URLSessionConfiguration.default
             let urlSession = URLSession.init(configuration: configutation, delegate: self, delegateQueue: nil)
             urlSession.dataTask(with: request, completionHandler: { (data, response, error) in
-                
+            
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: {
                     UIApplication.shared.isNetworkActivityIndicatorVisible = false
                 })
-                
                 DispatchQueue.main.async(execute: {
-                    
                     if let errorFound = error{
-                        if returnError{
-                            completionHandler(nil, errorFound.localizedDescription)
-                        }else{
-                            self.someThingWrong(msg: errorFound.localizedDescription)
-                        }
-                        
+                        completionHandler(nil, errorFound)
                     }else if let dataFound = data{
-                        print("Response - ",String(data: dataFound, encoding: .utf8)!)
-                        completionHandler(dataFound, nil)
-                    }else if returnError{
-                        completionHandler(nil,"No data found")
+                        print("Response - ",String(data: dataFound, encoding: .utf8) ?? "")
+                        completionHandler(dataFound,nil)
                     }else{
-                        completionHandler(nil,"No data found")
+                        completionHandler(nil, nil)
                     }
                 })
             }).resume()
-        }else{
-            
-            print("Invalid URL")
-            if returnError{
-                completionHandler(nil,"No data found")
-            }else{
-                self.someThingWrong()
-            }
         }
     }
-    
-    
     
     
 }
