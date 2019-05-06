@@ -16,8 +16,8 @@ enum MethodName:String {
 }
 
 class APIRequest:NSObject{
-   
-  func doRequestForJson(urlString:String,method:MethodName,parameters:Mappable?,showLoading:Bool = true,completionHandler:@escaping (Any?,Error?)->()){
+    
+    func requestJson(urlString:String,method:MethodName,parameters:Mappable?,showLoading:Bool = true,completionHandler:@escaping (Any?,Error?)->()){
         
         getDataFromServer(urlString: urlString,method: method, parameters: parameters) { (data, error) in
             if let errorFound = error{
@@ -35,8 +35,8 @@ class APIRequest:NSObject{
         }
     }
     
-    func doRequestForDecodable<T:Mappable>(urlString:String,mapable:T.Type,method:MethodName,parameters:Mappable?,showLoading:Bool = true,completionHandler:@escaping (T?,ServerErrorModel?,Error?)->()){
-       
+    func requestWithMappble<T:Mappable>(urlString:String,mapable:T.Type,method:MethodName,parameters:Mappable?,showLoading:Bool = true,completionHandler:@escaping (T?,ServerErrorModel?,Error?)->()){
+        
         
         getDataFromServer(urlString: urlString, method: method, parameters: parameters) { (data, error) in
             if let errorFound = error{
@@ -52,8 +52,8 @@ class APIRequest:NSObject{
                 }
                 //To be removed once API sorts the issue
                 
-                if let serverErrorModel = ServerErrorModel.init(JSONString: stringFromData){
-                        completionHandler(nil,serverErrorModel,nil)
+                if let serverErrorModel = ServerErrorModel.init(JSONString: stringFromData),serverErrorModel.error != nil{
+                    completionHandler(nil,serverErrorModel,nil)
                 }else{
                     let mappableObject = mapable.init(JSONString: stringFromData)
                     completionHandler(mappableObject,nil,nil)
@@ -68,30 +68,29 @@ class APIRequest:NSObject{
     }
     
     
-   fileprivate func getDataFromServer(urlString:String,method:MethodName,parameters:Mappable?,completionHandler:@escaping (Data?,Error?)->()){
-    
-     if let url = URL(string: urlString){
+    fileprivate func getDataFromServer(urlString:String,method:MethodName,parameters:Mappable?,completionHandler:@escaping (Data?,Error?)->()){
+        
+        if let url = URL(string: urlString){
             
             var request = URLRequest(url: url,timeoutInterval: 60)
             
-            // Unique Device Identifier
-            if let uuidString = UIDevice.current.identifierForVendor?.uuidString,let deviceToken = Preferences.getObjectFor(type: .deviceToke) as? String{
-                request.addValue(uuidString, forHTTPHeaderField: deviceToken)
-            }
-        
+            
             request.addValue("application/json;charset=utf-8", forHTTPHeaderField: "Content-Type")
             
             request.httpMethod = method.rawValue
             if let jsonString = parameters?.toJSONString(){
                 request.httpBody = jsonString.data(using: .utf8)
             }
+//            if let uuidString = UIDevice.current.identifierForVendor?.uuidString,let deviceToken = Preferences.getObjectFor(type: .deviceToke) as? String{
+//                request.addValue(uuidString, forHTTPHeaderField: deviceToken)
+//            }
             
             // Show Network Indicator
             UIApplication.shared.isNetworkActivityIndicatorVisible = true
             let configutation = URLSessionConfiguration.default
             let urlSession = URLSession.init(configuration: configutation, delegate: self, delegateQueue: nil)
             urlSession.dataTask(with: request, completionHandler: { (data, response, error) in
-            
+                
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: {
                     UIApplication.shared.isNetworkActivityIndicatorVisible = false
                 })
@@ -116,6 +115,7 @@ class APIRequest:NSObject{
 extension APIRequest:URLSessionDelegate{
     
 }
+
 
 
 
